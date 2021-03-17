@@ -6,37 +6,8 @@ use tokio_postgres::NoTls;
 use handlers::create;
 use handlers::get_all;
 
-mod config {
-    pub use ::config::ConfigError;
-    use serde::Deserialize;
-
-    #[derive(Deserialize)]
-    pub struct Config {
-        pub server_addr: String,
-        pub pg: deadpool_postgres::Config,
-    }
-
-    impl Config {
-        pub fn from_env() -> Result<Self, ConfigError> {
-            let mut cfg = ::config::Config::new();
-            cfg.merge(::config::Environment::new())?;
-            cfg.try_into()
-        }
-    }
-}
-
-mod models {
-    use serde::{Deserialize, Serialize};
-    use tokio_pg_mapper_derive::PostgresMapper;
-
-    #[derive(Deserialize, PostgresMapper, Serialize)]
-    #[pg_mapper(table = "list")]
-    pub struct List {
-        pub id: i32,
-        pub name: String,
-    }
-}
-
+mod config;
+mod db;
 
 mod errors {
     use actix_web::{HttpResponse, ResponseError};
@@ -68,35 +39,6 @@ mod errors {
     }
 }
 
-
-mod db {
-    use deadpool_postgres::Client;
-    use tokio_pg_mapper::FromTokioPostgresRow;
-
-    use crate::{errors::MyError, models::List};
-
-    pub async fn get_all(client: &Client) -> Result<Vec<List>, MyError> {
-        let _stmt = "select * from list";
-        let stmt = client.prepare(&_stmt).await.unwrap();
-
-        let result = client.query(&stmt, &[])
-            .await?
-            .iter()
-            .map(|row| List::from_row_ref(row).unwrap())
-            .collect::<Vec<List>>();
-        std::result::Result::Ok(result)
-    }
-
-    pub async fn create(client: &Client, name: String) -> Result<bool, MyError> {
-        let _stmt = "INSERT INTO list (id, name) VALUES (nextval('list_id_seq'), $1)";
-        let stmt = client.prepare(&_stmt).await.unwrap();
-
-        client.execute(&stmt, &[&name],).await?;
-        std::result::Result::Ok(true)
-    }
-}
-
-
 #[get("/health")]
 async fn health() -> impl Responder {
     HttpResponse::Ok().body("OK")
@@ -123,7 +65,7 @@ mod handlers {
         db_pool: web::Data<Pool>,
     ) -> Result<HttpResponse, Error> {
         let client: Client = db_pool.get().await.map_err(MyError::PoolError)?;
-        let all = db::get_all(&client).await?;
+        let all = db::db::get_all(&client).await?;
         Ok(HttpResponse::Ok().json(all))
     }
 
@@ -132,7 +74,7 @@ mod handlers {
         create: web::Json<Create>,
     ) -> Result<HttpResponse, Error> {
         let client: Client = db_pool.get().await.map_err(MyError::PoolError)?;
-        db::create(&client, create.name.to_string()).await?;
+        db::db::create(&client, create.name.to_string()).await?;
 
         Ok(HttpResponse::Ok().json(MyObj {
             name: create.name.to_string(),
@@ -148,7 +90,7 @@ async fn main() -> std::io::Result<()> {
     dotenv().ok();
     std::env::set_var("RUST_LOG", "actix_web=info");
     env_logger::init();
-    let config = crate::config::Config::from_env().unwrap();
+    let config = config::config::Config::from_env().unwrap();
     let pool = config.pg.create_pool(NoTls).unwrap();
 
     HttpServer::new(move || {
