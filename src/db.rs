@@ -37,4 +37,32 @@ pub mod db {
         std::result::Result::Ok(true)
     }
 
+    pub async fn get_items(client: &Client, list_id: i32) -> Result<Vec<List>, MyError> {
+        let _stmt = "select * from list_item where list = $1";
+        let stmt = client.prepare(&_stmt).await.unwrap();
+
+        let result = client.query(&stmt, &[&list_id])
+            .await?
+            .iter()
+            .map(|row| List::from_row_ref(row).unwrap())
+            .collect::<Vec<List>>();
+        std::result::Result::Ok(result)
+    }
+
+    pub async fn add_item(client: &Client, list_id: i32, name: String) -> Result<bool, MyError> {
+        let _stmt = "INSERT INTO list_item (id, list, name) VALUES (nextval('list_item_seq'), $1, $2)";
+        let stmt = client.prepare(&_stmt).await.unwrap();
+
+        client.execute(&stmt, &[&list_id, &name],).await?;
+        std::result::Result::Ok(true)
+    }
+
+    pub async fn remove_item(client: &Client, list_id: i32, id: i32) -> Result<bool, MyError> {
+        let _stmt = "DELETE FROM list_item where list = $1 and id = $2";
+        let stmt = client.prepare(&_stmt).await.unwrap();
+
+        client.execute(&stmt, &[&list_id, &id],).await?;
+        std::result::Result::Ok(true)
+    }
+
 }

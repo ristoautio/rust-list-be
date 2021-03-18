@@ -5,6 +5,7 @@ use tokio_postgres::NoTls;
 
 use handlers::create;
 use handlers::get_all;
+use crate::handlers::{get_list, add_item, remove_item};
 
 mod config;
 mod db;
@@ -60,6 +61,7 @@ mod handlers {
     use deadpool_postgres::{Client, Pool};
 
     use crate::{Create, db, errors::MyError, MyObj};
+    use actix_web::web::Path;
 
     pub async fn get_all(
         db_pool: web::Data<Pool>,
@@ -82,6 +84,34 @@ mod handlers {
         }))
     }
 
+    pub async fn get_list(
+        db_pool: web::Data<Pool>,
+        info: Path<i32>,
+    ) -> Result<HttpResponse, Error> {
+        let client: Client = db_pool.get().await.map_err(MyError::PoolError)?;
+        let items = db::db::get_items(&client, info.0).await?;
+        Ok(HttpResponse::Ok().json(items))
+    }
+
+    pub async fn add_item(
+        db_pool: web::Data<Pool>,
+        info: Path<i32>,
+        create: web::Json<Create>,
+    ) -> Result<HttpResponse, Error> {
+        let client: Client = db_pool.get().await.map_err(MyError::PoolError)?;
+        db::db::add_item(&client, info.0, create.name.to_string()).await?;
+        Ok(HttpResponse::Ok().json(""))
+    }
+
+    pub async fn remove_item(
+        db_pool: web::Data<Pool>,
+        info: Path<(i32, i32)>,
+    ) -> Result<HttpResponse, Error> {
+        let client: Client = db_pool.get().await.map_err(MyError::PoolError)?;
+        db::db::remove_item(&client, (info.0).0, (info.0).1).await?;
+        Ok(HttpResponse::Ok().json(""))
+    }
+
 }
 
 
@@ -101,6 +131,11 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/lists")
                 .route(web::get().to(get_all))
                 .route(web::post().to(create)))
+            .service(web::resource("/list/{id}")
+                .route(web::get().to(get_list))
+                .route(web::post().to(add_item)))
+            .service(web::resource("list/{list_id}/{id}")
+                .route(web::delete().to(remove_item)))
     })
         .bind("0.0.0.0:8080")?
         .run()
