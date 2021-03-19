@@ -6,6 +6,9 @@ use tokio_postgres::NoTls;
 use handlers::create;
 use handlers::get_all;
 use crate::handlers::{get_list, add_item, remove_item};
+use deadpool_postgres::Client;
+use crate::errors::MyError;
+use crate::errors::MyError::PoolError;
 
 mod config;
 mod db;
@@ -118,10 +121,14 @@ mod handlers {
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     dotenv().ok();
-    std::env::set_var("RUST_LOG", "actix_web=info");
-    env_logger::init();
     let config = config::config::Config::from_env().unwrap();
     let pool = config.pg.create_pool(NoTls).unwrap();
+
+    std::env::set_var("RUST_LOG", "actix_web=info");
+    env_logger::init();
+
+    let client: Client = pool.get().await.unwrap();
+    db::db::init(&client).await;
 
     HttpServer::new(move || {
         App::new()

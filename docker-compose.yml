@@ -1,0 +1,31 @@
+version: '3'
+services:
+
+  web:
+    build: .
+    depends_on:
+      - mydb
+    ports:
+      - 8080:8080
+    environment:
+      - SERVER_ADDR=0.0.0.0:8080
+      - PG.USER=test
+      - PG.PASSWORD=test
+      - PG.HOST=mydb
+      - PG.PORT=5432
+      - PG.DBNAME=test
+      - PG.POOL.MAX_SIZE=16
+    restart: always
+
+  mydb:
+    image: postgres
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    ports:
+      - 5432:5432
+    environment:
+      POSTGRES_USER: test
+
+volumes:
+  db-data:
+    driver: local

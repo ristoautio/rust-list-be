@@ -7,6 +7,7 @@ mod models {
     pub struct List {
         pub id: i32,
         pub name: String,
+        pub deleted: bool,
     }
 }
 
@@ -38,7 +39,7 @@ pub mod db {
     }
 
     pub async fn get_items(client: &Client, list_id: i32) -> Result<Vec<List>, MyError> {
-        let _stmt = "select * from list_item where list = $1";
+        let _stmt = "select * from list_item where list_id = $1 order by deleted asc";
         let stmt = client.prepare(&_stmt).await.unwrap();
 
         let result = client.query(&stmt, &[&list_id])
@@ -50,19 +51,40 @@ pub mod db {
     }
 
     pub async fn add_item(client: &Client, list_id: i32, name: String) -> Result<bool, MyError> {
-        let _stmt = "INSERT INTO list_item (id, list, name) VALUES (nextval('list_item_seq'), $1, $2)";
+        let _stmt = "INSERT INTO list_item (id, list_id, name) VALUES (nextval('list_item_seq'), $1, $2)";
         let stmt = client.prepare(&_stmt).await.unwrap();
 
         client.execute(&stmt, &[&list_id, &name],).await?;
         std::result::Result::Ok(true)
     }
 
-    pub async fn remove_item(client: &Client, list_id: i32, id: i32) -> Result<bool, MyError> {
-        let _stmt = "DELETE FROM list_item where list = $1 and id = $2";
+    pub async fn remove_item(client: &Client, list_id: i32, id: i32) -> Result<(), MyError> {
+        let _stmt = "UPDATE list_item SET deleted=true where list_id = $1 and id = $2";
         let stmt = client.prepare(&_stmt).await.unwrap();
 
         client.execute(&stmt, &[&list_id, &id],).await?;
-        std::result::Result::Ok(true)
+        std::result::Result::Ok(())
     }
 
+    pub async fn init(client: &Client) -> Result<(), MyError>{
+        client.batch_execute("
+            CREATE TABLE IF NOT EXISTS list (
+                id int primary key not null,
+                deleted boolean not null default false,
+                name varchar
+            );
+
+            CREATE TABLE IF NOT EXISTS list_item (
+                id int primary key not null,
+                name varchar not null,
+                deleted boolean not null default false,
+                list_id int not null references list(id)
+            );
+
+            CREATE SEQUENCE IF NOT EXISTS list_id_seq START 101;
+            CREATE SEQUENCE IF NOT EXISTS list_item_seq START 101;
+        ").await?;
+
+        Ok(())
+    }
 }
