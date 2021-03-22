@@ -138,10 +138,10 @@ async fn main() -> std::io::Result<()> {
             .service(web::resource("/lists")
                 .route(web::get().to(get_all))
                 .route(web::post().to(create)))
-            .service(web::resource("/list/{id}")
+            .service(web::resource("/lists/{id}")
                 .route(web::get().to(get_list))
                 .route(web::post().to(add_item)))
-            .service(web::resource("list/{list_id}/{id}")
+            .service(web::resource("lists/{list_id}/{id}")
                 .route(web::delete().to(remove_item)))
     })
         .bind("0.0.0.0:8080")?

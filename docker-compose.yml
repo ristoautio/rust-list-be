@@ -1,8 +1,26 @@
 version: '3'
 services:
 
-  web:
-    build: .
+  visualizer:
+    image: dockersamples/visualizer
+    deploy:
+      placement:
+        constraints:
+          - "node.role==manager"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    ports:
+      - 8888:8080
+
+  frontend:
+    image: ripa1/list-app
+    depends_on:
+      - backend
+    ports:
+      - 80:80
+
+  backend:
+    image: ripa1/rust-list-be
     depends_on:
       - mydb
     ports:
@@ -15,7 +33,6 @@ services:
       - PG.PORT=5432
       - PG.DBNAME=test
       - PG.POOL.MAX_SIZE=16
-    restart: always
 
   mydb:
     image: postgres
@@ -25,6 +42,7 @@ services:
       - 5432:5432
     environment:
       POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
 
 volumes:
   db-data:
